@@ -90,7 +90,43 @@ jobs:
               sudo apt-get install -y nginx certbot python3-certbot-nginx
             fi
 
-            echo "Writing Nginx reverse-proxy config..."
+            if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+              # ── First time: HTTP-only config → get cert → SSL config ──
+              echo "Writing HTTP-only Nginx config (pre-cert)..."
+              sudo tee /etc/nginx/sites-available/"$DOMAIN" > /dev/null <<EOF
+              server {
+                  listen 80;
+                  server_name $DOMAIN;
+
+                  location / {
+                      proxy_pass         http://127.0.0.1:${APP_PORT};
+                      proxy_http_version 1.1;
+                      proxy_set_header Host              \$host;
+                      proxy_set_header X-Real-IP         \$remote_addr;
+                      proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+                      proxy_set_header X-Forwarded-Proto \$scheme;
+                      proxy_cache_bypass \$http_upgrade;
+                  }
+              }
+              EOF
+
+              sudo ln -sf /etc/nginx/sites-available/"$DOMAIN" \
+                          /etc/nginx/sites-enabled/"$DOMAIN"
+              sudo nginx -t && sudo systemctl reload nginx
+
+              echo "Obtaining SSL certificate (first time)..."
+              sudo certbot certonly --nginx \
+                -d "$DOMAIN" \
+                --non-interactive \
+                --agree-tos \
+                -m "$SSL_EMAIL"
+            else
+              echo "Renewing SSL certificate..."
+              sudo certbot renew --non-interactive
+            fi
+
+            # ── Full SSL config (certs now exist) ──────────────────────
+            echo "Writing full SSL Nginx config..."
             sudo tee /etc/nginx/sites-available/"$DOMAIN" > /dev/null <<EOF
             server {
                 listen 80;
@@ -109,7 +145,6 @@ jobs:
                 location / {
                     proxy_pass         http://127.0.0.1:${APP_PORT};
                     proxy_http_version 1.1;
-
                     proxy_set_header Upgrade    \$http_upgrade;
                     proxy_set_header Connection 'upgrade';
                     proxy_set_header Host              \$host;
@@ -121,22 +156,8 @@ jobs:
             }
             EOF
 
-            echo "Enabling site..."
             sudo ln -sf /etc/nginx/sites-available/"$DOMAIN" \
                         /etc/nginx/sites-enabled/"$DOMAIN"
-
-            # Obtain/renew cert if missing (certonly — doesn't touch our config)
-            if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-              echo "Obtaining SSL certificate (first time)..."
-              sudo certbot certonly --nginx \
-                -d "$DOMAIN" \
-                --non-interactive \
-                --agree-tos \
-                -m "$SSL_EMAIL"
-            else
-              echo "Renewing SSL certificate..."
-              sudo certbot renew --non-interactive
-            fi
 
             echo "Testing Nginx configuration..."
             sudo nginx -t
