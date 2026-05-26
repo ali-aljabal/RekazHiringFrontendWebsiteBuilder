@@ -1,19 +1,20 @@
 # ─────────────────────────────────────────────────────────────
 # Stage 1 — Install dependencies
 # ─────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:20-slim AS deps
 
 WORKDIR /app
 
 # Copy only package files first (better layer caching)
 COPY package.json package-lock.json* ./
 
-RUN npm ci --include=optional
+# Use install (not ci) so platform-specific optional deps (lightningcss) resolve
+RUN npm install --include=optional
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2 — Build the Next.js app
 # ─────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -27,7 +28,7 @@ RUN npm run build
 # ─────────────────────────────────────────────────────────────
 # Stage 3 — Minimal production runtime
 # ─────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 
