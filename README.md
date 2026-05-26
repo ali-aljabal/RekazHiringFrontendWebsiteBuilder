@@ -293,4 +293,3 @@ bun run format
 - The main focus of this challenge was the builder functionality itself (editing, drag & drop, importing/exporting, responsiveness, etc.)
 - The internal design/content of the pre-made sections was not the primary focus
 - The app is fully responsive across different screen sizes
-- Dark mode support is prepared through Tailwind variants
