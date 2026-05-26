@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       # ----------------------------
@@ -57,7 +60,7 @@ jobs:
             DOMAIN="rekaz-task.alialjabal.com"
             SSL_EMAIL="admin@${DOMAIN}"
             IMAGE="ghcr.io/${{ steps.repo.outputs.name }}:latest"
-            CONTAINER="RekazTask"
+            CONTAINER="rekaztask"
             APP_PORT=6000          # Next.js default; change if you use a custom port
 
             # ── Docker: log in, pull, restart ──────────────────────────
