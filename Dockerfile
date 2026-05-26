@@ -9,10 +9,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 
+# --include=optional ensures lightningcss & swc native binaries are installed
 RUN \
     if [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
-    elif [ -f package-lock.json ]; then npm ci; \
-    else npm install; \
+    elif [ -f package-lock.json ]; then npm ci --include=optional; \
+    else npm install --include=optional; \
     fi
 
 COPY . .
