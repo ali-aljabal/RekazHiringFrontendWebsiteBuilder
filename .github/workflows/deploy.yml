@@ -32,7 +32,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ lower(github.repository) }}:latest
 
       # ----------------------------
       # Deploy on VPS via SSH
@@ -49,7 +49,7 @@ jobs:
             # ── Variables ──────────────────────────────────────────────
             DOMAIN="rekaz-task.alialjabal.com"
             SSL_EMAIL="admin@${DOMAIN}"
-            IMAGE="ghcr.io/${{ github.repository }}:latest"
+            IMAGE="ghcr.io/${{ lower(github.repository) }}:latest"
             CONTAINER="RekazTask"
             APP_PORT=6000          # Next.js default; change if you use a custom port
 
