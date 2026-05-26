@@ -1,0 +1,140 @@
+name: Deploy Next.js App with Docker + SSL
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------
+      # Checkout code
+      # ----------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ----------------------------
+      # Build Docker image locally and push to registry
+      # (Using GitHub Container Registry — free & no extra secrets needed)
+      # ----------------------------
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+
+      # ----------------------------
+      # Deploy on VPS via SSH
+      # ----------------------------
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            # ── Variables ──────────────────────────────────────────────
+            DOMAIN="rekaz-task.alialjabal.com"
+            SSL_EMAIL="admin@${DOMAIN}"
+            IMAGE="ghcr.io/${{ github.repository }}:latest"
+            CONTAINER="RekazTask"
+            APP_PORT=6000          # Next.js default; change if you use a custom port
+
+            # ── Docker: log in, pull, restart ──────────────────────────
+            echo "Logging in to GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+              -u "${{ github.actor }}" --password-stdin
+
+            echo "Pulling latest image..."
+            docker pull "$IMAGE"
+
+            echo "Stopping & removing old container (if any)..."
+            docker stop "$CONTAINER" 2>/dev/null || true
+            docker rm   "$CONTAINER" 2>/dev/null || true
+
+            echo "Starting new container..."
+            docker run -d \
+              --name "$CONTAINER" \
+              --restart unless-stopped \
+              -p 127.0.0.1:${APP_PORT}:${APP_PORT} \
+              -e NODE_ENV=production \
+              "$IMAGE"
+
+            # ── Nginx + Certbot ────────────────────────────────────────
+            if ! command -v nginx &>/dev/null; then
+              echo "Installing nginx..."
+              sudo apt-get update -qq
+              sudo apt-get install -y nginx certbot python3-certbot-nginx
+            fi
+
+            echo "Writing Nginx reverse-proxy config..."
+            sudo tee /etc/nginx/sites-available/"$DOMAIN" > /dev/null <<EOF
+            server {
+                listen 80;
+                server_name $DOMAIN;
+                return 301 https://\$server_name\$request_uri;
+            }
+
+            server {
+                listen 443 ssl;
+                server_name $DOMAIN;
+
+                ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+                ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+                ssl_protocols       TLSv1.2 TLSv1.3;
+
+                location / {
+                    proxy_pass         http://127.0.0.1:${APP_PORT};
+                    proxy_http_version 1.1;
+
+                    proxy_set_header Upgrade    \$http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host              \$host;
+                    proxy_set_header X-Real-IP         \$remote_addr;
+                    proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_cache_bypass \$http_upgrade;
+                }
+            }
+            EOF
+
+            echo "Enabling site..."
+            sudo ln -sf /etc/nginx/sites-available/"$DOMAIN" \
+                        /etc/nginx/sites-enabled/"$DOMAIN"
+
+            # Obtain/renew cert if missing (certonly — doesn't touch our config)
+            if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+              echo "Obtaining SSL certificate (first time)..."
+              sudo certbot certonly --nginx \
+                -d "$DOMAIN" \
+                --non-interactive \
+                --agree-tos \
+                -m "$SSL_EMAIL"
+            else
+              echo "Renewing SSL certificate..."
+              sudo certbot renew --non-interactive
+            fi
+
+            echo "Testing Nginx configuration..."
+            sudo nginx -t
+
+            echo "Reloading Nginx..."
+            sudo systemctl reload nginx
+
+            # Clean up unused Docker images to save disk space
+            docker image prune -f
+
+            echo "✅ DEPLOYMENT COMPLETE"

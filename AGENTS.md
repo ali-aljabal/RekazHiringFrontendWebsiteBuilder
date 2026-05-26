@@ -7,18 +7,18 @@
 - **Zustand** + **Immer** middleware + **Zundo** (undo/redo, 50-step limit)
 - **@dnd-kit** (drag-and-drop), **motion** (animations), **lucide-react** (icons)
 - **shadcn/ui** (New York style, `components.json` at root, source from `@/components/ui`)
-- **Bun** is the package manager (`bun.lock`, `bunfig.toml`)
+- **npm** is the package manager (`package-lock.json`)
 
 
 ## Commands
 
 ```bash
-bun dev           # dev server
-bun run build     # production build
-bun start         # start production server
-bun run lint      # eslint . (no typecheck)
-bun run format    # prettier --write .
-bun install       # install deps
+npm run dev       # dev server
+npm run build     # production build
+npm start         # start production server
+npm run lint      # eslint . (no typecheck)
+npm run format    # prettier --write .
+npm install       # install deps
 ```
 
 No `typecheck` script exists; `bun run lint` is ESLint only. There are no tests.
