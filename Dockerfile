@@ -8,7 +8,7 @@ WORKDIR /app
 # Copy only package files first (better layer caching)
 COPY package.json package-lock.json* ./
 
-RUN npm ci --prefer-offline
+RUN npm ci --include=optional
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2 — Build the Next.js app
